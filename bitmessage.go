@@ -8,11 +8,12 @@ import (
 )
 
 const (
-	Version           int32 = 3
-	UserAgent               = "go 1.5 package github.com/mastercactapus/bitmessage"
-	NodeTimeout             = time.Hour * 3
-	HandshakeTimeout        = time.Second * 20
-	ConnectionTimeout       = time.Minute * 10
+	Version              int32 = 3
+	UserAgent                  = "go 1.5 package github.com/mastercactapus/bitmessage"
+	NodeTimeout                = time.Hour * 3
+	HandshakeTimeout           = time.Second * 20
+	ConnectionTimeout          = time.Minute * 10
+	MaxObjectExpiresTime       = time.Hour * (24*28 + 3)
 )
 
 var order = binary.BigEndian

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha512"
 	"encoding"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -20,7 +21,7 @@ const (
 	MessageTypeVerAck              = "verack"
 	MessageTypeAddr                = "addr"
 	MessageTypeInv                 = "inv"
-	MessageTypeGetdata             = "getdata"
+	MessageTypeGetData             = "getdata"
 	MessageTypeObject              = "object"
 )
 
@@ -54,7 +55,30 @@ type VersionMessage struct {
 	UserAgent     string
 	StreamNumbers []uint64
 }
+type AddrMessage struct {
+	Addresses []FullAddress
+}
+type InvMessage struct {
+	Inventory []InvVector
+}
+type GetDataMessage struct {
+	Inventory []InvVector
+}
+type ObjectMessage struct {
+	Nonce   uint64
+	Expires time.Time
+	Type    ObjectType
+	Version uint64
+	Stream  uint64
+	Payload []byte
+}
+
 type VerAckMessage struct{}
+type InvVector [32]byte
+type RawMessage struct {
+	Type    MessageType
+	Payload []byte
+}
 
 func (w *MessageWriter) WriteMessage(m Message) (int, error) {
 	cmd := []byte(m.Command())
@@ -119,8 +143,12 @@ func (r *MessageReader) ReadMessage() (Message, error) {
 		m = new(VersionMessage)
 	case MessageTypeVerAck:
 		m = new(VerAckMessage)
+	case MessageTypeAddr:
+		m = new(AddrMessage)
+	case MessageTypeInv:
+		m = new(InvMessage)
 	default:
-		return nil, fmt.Errorf("Unknown message type: %s", cmd)
+		m = &RawMessage{Type: cmd}
 	}
 	return m, m.UnmarshalBinary(data)
 }
@@ -219,5 +247,112 @@ func (m *VerAckMessage) MarshalBinary() ([]byte, error) {
 	return []byte{}, nil
 }
 func (m *VerAckMessage) UnmarshalBinary(b []byte) error {
+	return nil
+}
+
+func (m *RawMessage) Command() MessageType {
+	return m.Type
+}
+func (m *RawMessage) MarshalBinary() ([]byte, error) {
+	b := make([]byte, len(m.Payload))
+	copy(b, m.Payload)
+	return b, nil
+}
+func (m *RawMessage) UnmarshalBinary(b []byte) error {
+	m.Payload = make([]byte, len(b))
+	copy(m.Payload, b)
+	return nil
+}
+
+func (m *AddrMessage) Command() MessageType {
+	return MessageTypeAddr
+}
+func (m *AddrMessage) MarshalBinary() ([]byte, error) {
+	n := len(m.Addresses)
+	b := make([]byte, 10, n*38+10)
+	if n > 1000 {
+		n = 1000
+	}
+	blen := binary.PutUvarint(b, uint64(n))
+	b = b[:blen]
+	var data []byte
+	var err error
+	for i := range m.Addresses {
+		data, err = m.Addresses[i].MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		b = append(b, data...)
+	}
+	return b, nil
+}
+func (m *AddrMessage) UnmarshalBinary(b []byte) error {
+	num, offset := binary.Uvarint(b)
+	if num > 1000 {
+		return ErrTooLong
+	}
+	m.Addresses = make([]FullAddress, num)
+	var err error
+	for i := range m.Addresses {
+		err = m.Addresses[i].UnmarshalBinary(b[offset:])
+		if err != nil {
+			return err
+		}
+		offset += 38
+	}
+	return nil
+}
+
+func (v InvVector) String() string {
+	return hex.EncodeToString(v[:])
+}
+
+func (m *InvMessage) Command() MessageType {
+	return MessageTypeInv
+}
+func (m *InvMessage) MarshalBinary() ([]byte, error) {
+	b := make([]byte, 10, 10+32*len(m.Inventory))
+	blen := binary.PutUvarint(b, uint64(len(m.Inventory)))
+	b = b[:blen]
+	for i := range m.Inventory {
+		b = append(b, m.Inventory[i][:]...)
+	}
+	return b, nil
+}
+func (m *InvMessage) UnmarshalBinary(b []byte) error {
+	num, offset := binary.Uvarint(b)
+	if num*32 > uint64(len(b)) {
+		return ErrTooLong
+	}
+	m.Inventory = make([]InvVector, num)
+	for i := range m.Inventory {
+		copy(m.Inventory[i][:], b[offset:])
+		offset += 32
+	}
+	return nil
+}
+
+func (m *GetDataMessage) Command() MessageType {
+	return MessageTypeGetData
+}
+func (m *GetDataMessage) MarshalBinary() ([]byte, error) {
+	b := make([]byte, 10, 10+32*len(m.Inventory))
+	blen := binary.PutUvarint(b, uint64(len(m.Inventory)))
+	b = b[:blen]
+	for i := range m.Inventory {
+		b = append(b, m.Inventory[i][:]...)
+	}
+	return b, nil
+}
+func (m *GetDataMessage) UnmarshalBinary(b []byte) error {
+	num, offset := binary.Uvarint(b)
+	if num*32 > uint64(len(b)) {
+		return ErrTooLong
+	}
+	m.Inventory = make([]InvVector, num)
+	for i := range m.Inventory {
+		copy(m.Inventory[i][:], b[offset:])
+		offset += 32
+	}
 	return nil
 }
