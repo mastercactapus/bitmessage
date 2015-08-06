@@ -356,3 +356,31 @@ func (m *GetDataMessage) UnmarshalBinary(b []byte) error {
 	}
 	return nil
 }
+
+func (m *ObjectMessage) Command() MessageType {
+	return MessageTypeObject
+}
+func (m *ObjectMessage) MarshalBinary() ([]byte, error) {
+	b := make([]byte, 40, 40+len(m.Payload))
+	order.PutUint64(b, m.Nonce)
+	order.PutUint64(b[8:], uint64(m.Expires.Unix()))
+	order.PutUint32(b[16:], uint32(m.Type))
+	blen := binary.PutUvarint(b[20:], m.Version)
+	blen += binary.PutUvarint(b[20+blen:], m.Stream)
+	b = b[:20+blen]
+	b = append(b, m.Payload...)
+	return b, nil
+}
+func (m *ObjectMessage) UnmarshalBinary(b []byte) error {
+	m.Nonce = order.Uint64(b)
+	m.Expires = time.Unix(int64(order.Uint64(b[8:])), 0)
+	m.Type = ObjectType(order.Uint32(b[16:]))
+	var blen int
+	m.Version, blen = binary.Uvarint(b[20:])
+	b = b[20+blen:]
+	m.Stream, blen = binary.Uvarint(b)
+	b = b[blen:]
+	m.Payload = make([]byte, len(b))
+	copy(m.Payload, b)
+	return nil
+}
