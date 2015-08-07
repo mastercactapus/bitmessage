@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha512"
 	"encoding"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -273,7 +272,7 @@ func (m *AddrMessage) MarshalBinary() ([]byte, error) {
 	if n > 1000 {
 		n = 1000
 	}
-	blen := binary.PutUvarint(b, uint64(n))
+	blen := encodeBitmessageUvarint(b, uint64(n))
 	b = b[:blen]
 	var data []byte
 	var err error
@@ -287,7 +286,7 @@ func (m *AddrMessage) MarshalBinary() ([]byte, error) {
 	return b, nil
 }
 func (m *AddrMessage) UnmarshalBinary(b []byte) error {
-	num, offset := binary.Uvarint(b)
+	num, offset := decodeBitmessageUvarint(b)
 	if num > 1000 {
 		return ErrTooLong
 	}
@@ -312,7 +311,7 @@ func (m *InvMessage) Command() MessageType {
 }
 func (m *InvMessage) MarshalBinary() ([]byte, error) {
 	b := make([]byte, 10, 10+32*len(m.Inventory))
-	blen := binary.PutUvarint(b, uint64(len(m.Inventory)))
+	blen := encodeBitmessageUvarint(b, uint64(len(m.Inventory)))
 	b = b[:blen]
 	for i := range m.Inventory {
 		b = append(b, m.Inventory[i][:]...)
@@ -320,7 +319,7 @@ func (m *InvMessage) MarshalBinary() ([]byte, error) {
 	return b, nil
 }
 func (m *InvMessage) UnmarshalBinary(b []byte) error {
-	num, offset := binary.Uvarint(b)
+	num, offset := decodeBitmessageUvarint(b)
 	if num*32 > uint64(len(b)) {
 		return ErrTooLong
 	}
@@ -337,7 +336,7 @@ func (m *GetDataMessage) Command() MessageType {
 }
 func (m *GetDataMessage) MarshalBinary() ([]byte, error) {
 	b := make([]byte, 10, 10+32*len(m.Inventory))
-	blen := binary.PutUvarint(b, uint64(len(m.Inventory)))
+	blen := encodeBitmessageUvarint(b, uint64(len(m.Inventory)))
 	b = b[:blen]
 	for i := range m.Inventory {
 		b = append(b, m.Inventory[i][:]...)
@@ -345,7 +344,7 @@ func (m *GetDataMessage) MarshalBinary() ([]byte, error) {
 	return b, nil
 }
 func (m *GetDataMessage) UnmarshalBinary(b []byte) error {
-	num, offset := binary.Uvarint(b)
+	num, offset := decodeBitmessageUvarint(b)
 	if num*32 > uint64(len(b)) {
 		return ErrTooLong
 	}
@@ -365,8 +364,8 @@ func (m *ObjectMessage) MarshalBinary() ([]byte, error) {
 	order.PutUint64(b, m.Nonce)
 	order.PutUint64(b[8:], uint64(m.Expires.Unix()))
 	order.PutUint32(b[16:], uint32(m.Type))
-	blen := binary.PutUvarint(b[20:], m.Version)
-	blen += binary.PutUvarint(b[20+blen:], m.Stream)
+	blen := encodeBitmessageUvarint(b[20:], m.Version)
+	blen += encodeBitmessageUvarint(b[20+blen:], m.Stream)
 	b = b[:20+blen]
 	b = append(b, m.Payload...)
 	return b, nil
@@ -376,11 +375,19 @@ func (m *ObjectMessage) UnmarshalBinary(b []byte) error {
 	m.Expires = time.Unix(int64(order.Uint64(b[8:])), 0)
 	m.Type = ObjectType(order.Uint32(b[16:]))
 	var blen int
-	m.Version, blen = binary.Uvarint(b[20:])
+	m.Version, blen = decodeBitmessageUvarint(b[20:])
 	b = b[20+blen:]
-	m.Stream, blen = binary.Uvarint(b)
+	m.Stream, blen = decodeBitmessageUvarint(b)
 	b = b[blen:]
 	m.Payload = make([]byte, len(b))
 	copy(m.Payload, b)
 	return nil
+}
+
+func CalcVector(p []byte) InvVector {
+	sum := sha512.Sum512(p)
+	sum = sha512.Sum512(sum[:])
+	var v InvVector
+	copy(v[:], sum[:32])
+	return v
 }

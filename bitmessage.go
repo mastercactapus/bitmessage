@@ -22,7 +22,7 @@ var ErrUnknownType = errors.New("unknown type")
 var ErrVarIntOverflow = errors.New("varint overflow (larger than 64 bits)")
 
 func UnmarshalBinaryString(b []byte) (string, int, error) {
-	l, s := binary.Uvarint(b)
+	l, s := decodeBitmessageUvarint(b)
 	if s == 0 {
 		return "", 0, io.ErrUnexpectedEOF
 	}
@@ -37,12 +37,12 @@ func UnmarshalBinaryString(b []byte) (string, int, error) {
 func MarshalBinaryString(val string) ([]byte, error) {
 	bstr := []byte(val)
 	b := make([]byte, 10+len(bstr))
-	s := binary.PutUvarint(b, uint64(len(bstr)))
+	s := encodeBitmessageUvarint(b, uint64(len(bstr)))
 	copy(b[s:], bstr)
 	return b[:s+len(bstr)], nil
 }
 func UnmarshalBinaryIntList(b []byte) ([]uint64, int, error) {
-	l, s := binary.Uvarint(b)
+	l, s := decodeBitmessageUvarint(b)
 	if s == 0 {
 		return nil, 0, io.ErrUnexpectedEOF
 	}
@@ -55,7 +55,7 @@ func UnmarshalBinaryIntList(b []byte) ([]uint64, int, error) {
 	vals := make([]uint64, l)
 	p := s
 	for i := range vals {
-		vals[i], s = binary.Uvarint(b[p:])
+		vals[i], s = decodeBitmessageUvarint(b[p:])
 		if s == 0 {
 			return nil, 0, io.ErrUnexpectedEOF
 		}
@@ -68,9 +68,9 @@ func UnmarshalBinaryIntList(b []byte) ([]uint64, int, error) {
 }
 func MarshalBinaryIntList(vals []uint64) ([]byte, error) {
 	b := make([]byte, 10*(len(vals)+1))
-	s := binary.PutUvarint(b, uint64(len(vals)))
+	s := encodeBitmessageUvarint(b, uint64(len(vals)))
 	for _, v := range vals {
-		s += binary.PutUvarint(b[s:], v)
+		s += encodeBitmessageUvarint(b[s:], v)
 	}
 	return b[:s], nil
 }
