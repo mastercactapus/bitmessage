@@ -8,6 +8,7 @@ import (
 type Store interface {
 	SaveObject(InvVector, []byte) error
 	GetObject(InvVector) ([]byte, error)
+	DeleteObject(InvVector) error
 	ListObjects() ([]InvVector, error)
 	Close() error
 }
@@ -39,7 +40,15 @@ func NewFileStore(file string, mode os.FileMode) (*FileStore, error) {
 func (fs *FileStore) Close() error {
 	return fs.db.Close()
 }
-
+func (fs *FileStore) DeleteObject(v InvVector) error {
+	return fs.db.Update(func(tx *bolt.Tx) error {
+		bk := tx.Bucket(objectBucket)
+		if bk == nil {
+			return nil
+		}
+		return bk.Delete(v[:])
+	})
+}
 func (fs *FileStore) SaveObject(v InvVector, data []byte) error {
 	return fs.db.Update(func(tx *bolt.Tx) error {
 		bk, err := tx.CreateBucketIfNotExists(objectBucket)
