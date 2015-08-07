@@ -204,6 +204,13 @@ func (c *connection) serveMessage(m Message) error {
 			c.log.Infof("requesting %d missing objects", len(missing))
 			c.outbound <- &GetDataMessage{Inventory: missing}
 		}
+	case *ObjectMessage:
+		data, err := v.MarshalBinary()
+		if err != nil {
+			return err
+		}
+		vect := CalcVector(data)
+		return c.node.s.SaveObject(vect, data)
 	}
 	return nil
 }

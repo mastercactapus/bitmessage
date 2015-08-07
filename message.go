@@ -146,6 +146,8 @@ func (r *MessageReader) ReadMessage() (Message, error) {
 		m = new(AddrMessage)
 	case MessageTypeInv:
 		m = new(InvMessage)
+	case MessageTypeObject:
+		m = new(ObjectMessage)
 	default:
 		m = &RawMessage{Type: cmd}
 	}
