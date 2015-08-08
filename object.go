@@ -33,6 +33,23 @@ type MsgObject struct {
 	Encrypted []byte
 }
 
+type InvVectors []InvVector
+
+func (v InvVectors) Len() int {
+	return len(v)
+}
+func (v InvVectors) Swap(a, b int) {
+	v[a], v[b] = v[b], v[a]
+}
+func (v InvVectors) Less(a, b int) bool {
+	for i := 0; i < 32; i++ {
+		if v[a][i] != v[b][i] {
+			return v[a][i] < v[b][i]
+		}
+	}
+	return false
+}
+
 func GetPOWValue(data []byte) uint64 {
 	nonce := data[:8]
 	dataToCheck := data[8:]

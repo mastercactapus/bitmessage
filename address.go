@@ -2,6 +2,7 @@ package bitmessage
 
 import (
 	"net"
+	"time"
 )
 
 type Address struct {
@@ -11,7 +12,7 @@ type Address struct {
 }
 
 type FullAddress struct {
-	Time   uint32
+	Time   time.Time
 	Stream uint32
 	Address
 }
@@ -32,14 +33,14 @@ func (m *Address) MarshalBinary() ([]byte, error) {
 }
 
 func (m *FullAddress) UnmarshalBinary(b []byte) error {
-	m.Time = order.Uint32(b)
-	m.Stream = order.Uint32(b[4:])
-	return m.Address.UnmarshalBinary(b[8:])
+	m.Time = time.Unix(int64(order.Uint64(b)), 0)
+	m.Stream = order.Uint32(b[8:])
+	return m.Address.UnmarshalBinary(b[12:])
 }
 func (m *FullAddress) MarshalBinary() ([]byte, error) {
-	b := make([]byte, 8, 36)
-	order.PutUint32(b, m.Time)
-	order.PutUint32(b[4:], m.Stream)
+	b := make([]byte, 12, 40)
+	order.PutUint64(b, uint64(m.Time.Unix()))
+	order.PutUint32(b[8:], m.Stream)
 	addr, err := m.Address.MarshalBinary()
 	if err != nil {
 		return nil, err

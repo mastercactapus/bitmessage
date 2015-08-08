@@ -200,6 +200,8 @@ func (c *connection) serveMessage(m Message) error {
 				missing = append(missing, i)
 			}
 		}
+		// request in byte-order
+		sort.Sort(InvVectors(missing))
 		if len(missing) > 0 {
 			c.log.Infof("requesting %d missing objects", len(missing))
 			c.outbound <- &GetDataMessage{Inventory: missing}
@@ -233,9 +235,14 @@ func (n *Node) handle(outgoing bool, conn net.Conn) {
 		return
 	}
 
+	n.addConnection(c)
 	// TODO: send addrs
 
-	n.addConnection(c)
+	im := &InvMessage{}
+	im.Inventory, err = c.node.s.ListObjects()
+	c.outbound <- im
+	im = nil
+
 	go c.readloop()
 	var m Message
 	for {

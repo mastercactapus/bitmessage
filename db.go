@@ -34,6 +34,7 @@ func NewFileStore(file string, mode os.FileMode) (*FileStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	db.NoSync = true
 	return &FileStore{db: db}, nil
 }
 
