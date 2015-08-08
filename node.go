@@ -2,10 +2,12 @@ package bitmessage
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
+	"sort"
 	"sync"
 	"time"
 )
@@ -30,6 +32,41 @@ type connection struct {
 	version  *VersionMessage
 	inbound  chan Message
 	outbound chan Message
+}
+
+func GCStoreLoop(s Store) {
+	t := time.NewTicker(time.Minute)
+	var err error
+	for {
+		err = gcStore(s)
+		if err != nil {
+			log.Errorln("GC of database failed:", err)
+		}
+		<-t.C
+	}
+}
+
+// gcStore will garbage-collect Store (removing expired objects)
+func gcStore(s Store) error {
+	objs, err := s.ListObjects()
+	if err != nil {
+		return err
+	}
+	var data []byte
+	for _, obj := range objs {
+		data, err = s.GetObject(obj)
+		if err != nil {
+			return err
+		}
+		if time.Now().Unix() >= int64(order.Uint64(data[8:])) {
+			log.Infoln("GC:", hex.EncodeToString(obj[:]))
+			err = s.DeleteObject(obj)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func nonce() uint64 {
@@ -191,8 +228,13 @@ func (c *connection) handshake(outgoing bool) error {
 	}
 	return nil
 }
+
 func (c *connection) serveMessage(m Message) error {
 	switch v := m.(type) {
+	case *AddrMessage:
+		for _, addr := range v.Addresses {
+			c.log.Infoln("Got Address:", addr.IP.String())
+		}
 	case *InvMessage:
 		missing := make([]InvVector, 0, len(v.Inventory))
 		for _, i := range v.Inventory {
@@ -212,6 +254,7 @@ func (c *connection) serveMessage(m Message) error {
 			return err
 		}
 		vect := CalcVector(data)
+		c.log.Infoln("Store:", hex.EncodeToString(vect[:]))
 		return c.node.s.SaveObject(vect, data)
 	}
 	return nil
